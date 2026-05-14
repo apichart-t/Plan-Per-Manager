@@ -1,125 +1,92 @@
+import { createClient } from "@supabase/supabase-js";
 import { Personnel, YearPlan, BookingLog, DutyRoster } from "./types";
 
-const BASE_URL = "/api";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.warn("Supabase credentials missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+}
+
+export const supabase = createClient(SUPABASE_URL || "", SUPABASE_ANON_KEY || "");
 
 export const api = {
   getPersonnel: async (): Promise<Personnel[]> => {
-    const res = await fetch(`${BASE_URL}/personnel`);
-    if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลกำลังพลได้");
-    return res.json();
+    const { data, error } = await supabase.from("personnel").select("*");
+    if (error) throw new Error(error.message);
+    return data || [];
   },
 
   getYearPlan: async (): Promise<YearPlan[]> => {
-    const res = await fetch(`${BASE_URL}/year-plan`);
-    if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลแผนวาระงานได้");
-    return res.json();
+    const { data, error } = await supabase.from("year_plan").select("*");
+    if (error) throw new Error(error.message);
+    return data || [];
   },
 
   getBookingLog: async (): Promise<BookingLog[]> => {
-    const res = await fetch(`${BASE_URL}/booking-log`);
-    if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลประวัติการจัดสรรได้");
-    return res.json();
+    const { data, error } = await supabase.from("BookingLog").select("*");
+    if (error) throw new Error(error.message);
+    return data || [];
   },
 
   getDutyRoster: async (): Promise<DutyRoster[]> => {
-    const res = await fetch(`${BASE_URL}/duty-roster`);
-    if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลเวรประจำเดือนได้");
-    return res.json();
+    const { data, error } = await supabase.from("DutyRoster").select("*");
+    if (error) throw new Error(error.message);
+    return data || [];
   },
 
   addYearPlan: async (data: Partial<YearPlan>): Promise<YearPlan> => {
-    const res = await fetch(`${BASE_URL}/year-plan`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || "ไม่สามารถบันทึกแผนวาระงานได้");
-    }
-    return res.json();
+    const { data: inserted, error } = await supabase.from("year_plan").insert([data]).select();
+    if (error) throw new Error(error.message);
+    return inserted[0];
   },
 
   updateYearPlan: async (id: string, data: Partial<YearPlan>): Promise<YearPlan> => {
-    const res = await fetch(`${BASE_URL}/year-plan/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || "ไม่สามารถแก้ไขแผนงานได้");
-    }
-    return res.json();
+    const { data: updated, error } = await supabase.from("year_plan").update(data).eq("id", id).select();
+    if (error) throw new Error(error.message);
+    return updated[0];
   },
 
   deleteYearPlan: async (id: string): Promise<any> => {
-    const res = await fetch(`${BASE_URL}/year-plan/${id}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || "ไม่สามารถลบแผนงานได้");
-    }
-    return res.json();
+    // Delete related bookings first
+    await supabase.from("BookingLog").delete().eq("eventId", id);
+    
+    const { data, error } = await supabase.from("year_plan").delete().eq("id", id).select();
+    if (error) throw new Error(error.message);
+    return data;
   },
 
   addBooking: async (data: { monthYear: string; eventId: string; personnelId: string }): Promise<BookingLog> => {
-    const res = await fetch(`${BASE_URL}/booking`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || "ไม่สามารถจัดสรรรายชื่อได้");
-    }
-    return res.json();
+    const { data: inserted, error } = await supabase.from("BookingLog").insert([data]).select();
+    if (error) throw new Error(error.message);
+    return inserted[0];
   },
 
   deleteBooking: async (id: string): Promise<any> => {
-    const res = await fetch(`${BASE_URL}/booking/${id}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || "ไม่สามารถยกเลิกการจองได้");
-    }
-    return res.json();
+    const { data, error } = await supabase.from("BookingLog").delete().eq("id", id).select();
+    if (error) throw new Error(error.message);
+    return data;
   },
   
   addDutyRoster: async (data: { personnelId: string; monthYear: string; status: string }): Promise<DutyRoster> => {
-    const res = await fetch(`${BASE_URL}/duty-roster`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || "ไม่สามารถบันทึกข้อมูลเวรได้");
-    }
-    return res.json();
+    const { data: inserted, error } = await supabase.from("DutyRoster").insert([data]).select();
+    if (error) throw new Error(error.message);
+    return inserted[0];
   },
 
   deleteDutyRoster: async (id: string): Promise<any> => {
-    const res = await fetch(`${BASE_URL}/duty-roster/${id}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || "ไม่สามารถลบข้อมูลเวรได้");
-    }
-    return res.json();
+    const { data, error } = await supabase.from("DutyRoster").delete().eq("id", id).select();
+    if (error) throw new Error(error.message);
+    return data;
   },
   
   deletePersonnel: async (id: string): Promise<any> => {
-    const res = await fetch(`${BASE_URL}/personnel/${id}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || "ไม่สามารถลบข้อมูลกำลังพลได้");
-    }
-    return res.json();
+    // Cascade delete manually (Supabase could do this if configured, but we keep it safe)
+    await supabase.from("BookingLog").delete().eq("personnelId", id);
+    await supabase.from("DutyRoster").delete().eq("personnelId", id);
+    
+    const { data, error } = await supabase.from("personnel").delete().eq("id", id).select();
+    if (error) throw new Error(error.message);
+    return data;
   },
 };
