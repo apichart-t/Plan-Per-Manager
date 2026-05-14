@@ -1,11 +1,8 @@
 [build]
-  # ลบบรรทัด base = "/opt/build" ทิ้ง และแก้เป็น:
-  
-  # กรณีโค้ดอยู่หน้าแรกสุด
-  base = "." 
-  
-  # หรือ กรณีโค้ดอยู่ในโฟลเดอร์ย่อย (เปลี่ยนชื่อให้ตรงกับของคุณ)
-  base = "PlanPerManager" 
-  
   command = "npm run build"
   publish = "dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
