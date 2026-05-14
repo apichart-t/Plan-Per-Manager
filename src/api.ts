@@ -1,92 +1,96 @@
-import { createClient } from "@supabase/supabase-js";
+/**
+ * api.ts — Frontend API layer (calls /api/* routes on Express server)
+ *
+ * ⚠️  ไฟล์นี้เรียก backend Express routes ที่ server.ts สร้างไว้
+ *      ไม่ได้เรียก Supabase โดยตรง เพื่อป้องกัน credential รั่วไหล
+ */
+
 import { Personnel, YearPlan, BookingLog, DutyRoster } from "./types";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// ── Helper ──────────────────────────────────────────────────────
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn("Supabase credentials missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+async function apiFetch<T>(
+  url: string,
+  options?: RequestInit
+): Promise<T> {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+
+  const json = await res.json();
+
+  if (!res.ok) {
+    throw new Error(json?.error ?? `HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  return json as T;
 }
 
-export const supabase = createClient(SUPABASE_URL || "", SUPABASE_ANON_KEY || "");
+// ── API ─────────────────────────────────────────────────────────
 
 export const api = {
-  getPersonnel: async (): Promise<Personnel[]> => {
-    const { data, error } = await supabase.from("personnel").select("*");
-    if (error) throw new Error(error.message);
-    return data || [];
-  },
+  // Personnel
+  getPersonnel: (): Promise<Personnel[]> =>
+    apiFetch("/api/personnel"),
 
-  getYearPlan: async (): Promise<YearPlan[]> => {
-    const { data, error } = await supabase.from("year_plan").select("*");
-    if (error) throw new Error(error.message);
-    return data || [];
-  },
+  deletePersonnel: (id: string): Promise<{ status: string }> =>
+    apiFetch(`/api/personnel/${id}`, { method: "DELETE" }),
 
-  getBookingLog: async (): Promise<BookingLog[]> => {
-    const { data, error } = await supabase.from("BookingLog").select("*");
-    if (error) throw new Error(error.message);
-    return data || [];
-  },
+  // Year Plan
+  getYearPlan: (): Promise<YearPlan[]> =>
+    apiFetch("/api/year-plan"),
 
-  getDutyRoster: async (): Promise<DutyRoster[]> => {
-    const { data, error } = await supabase.from("DutyRoster").select("*");
-    if (error) throw new Error(error.message);
-    return data || [];
-  },
+  addYearPlan: (data: Omit<YearPlan, "id">): Promise<YearPlan> =>
+    apiFetch("/api/year-plan", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
-  addYearPlan: async (data: Partial<YearPlan>): Promise<YearPlan> => {
-    const { data: inserted, error } = await supabase.from("year_plan").insert([data]).select();
-    if (error) throw new Error(error.message);
-    return inserted[0];
-  },
+  updateYearPlan: (id: string, data: Partial<Omit<YearPlan, "id">>): Promise<YearPlan> =>
+    apiFetch(`/api/year-plan/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
 
-  updateYearPlan: async (id: string, data: Partial<YearPlan>): Promise<YearPlan> => {
-    const { data: updated, error } = await supabase.from("year_plan").update(data).eq("id", id).select();
-    if (error) throw new Error(error.message);
-    return updated[0];
-  },
+  deleteYearPlan: (id: string): Promise<{ status: string }> =>
+    apiFetch(`/api/year-plan/${id}`, { method: "DELETE" }),
 
-  deleteYearPlan: async (id: string): Promise<any> => {
-    // Delete related bookings first
-    await supabase.from("BookingLog").delete().eq("eventId", id);
-    
-    const { data, error } = await supabase.from("year_plan").delete().eq("id", id).select();
-    if (error) throw new Error(error.message);
-    return data;
-  },
+  // Booking Log
+  getBookingLog: (): Promise<BookingLog[]> =>
+    apiFetch("/api/booking-log"),
 
-  addBooking: async (data: { monthYear: string; eventId: string; personnelId: string }): Promise<BookingLog> => {
-    const { data: inserted, error } = await supabase.from("BookingLog").insert([data]).select();
-    if (error) throw new Error(error.message);
-    return inserted[0];
-  },
+  addBooking: (data: {
+    monthYear: string;
+    eventId: string;
+    personnelId: string;
+  }): Promise<BookingLog> =>
+    apiFetch("/api/booking", {
+      method: "POST",
+      body: JSON.stringify({
+        ...data,
+        timestamp: new Date().toISOString(), // ✅ always include timestamp
+      }),
+    }),
 
-  deleteBooking: async (id: string): Promise<any> => {
-    const { data, error } = await supabase.from("BookingLog").delete().eq("id", id).select();
-    if (error) throw new Error(error.message);
-    return data;
-  },
-  
-  addDutyRoster: async (data: { personnelId: string; monthYear: string; status: string }): Promise<DutyRoster> => {
-    const { data: inserted, error } = await supabase.from("DutyRoster").insert([data]).select();
-    if (error) throw new Error(error.message);
-    return inserted[0];
-  },
+  deleteBooking: (id: string): Promise<{ status: string }> =>
+    apiFetch(`/api/booking/${id}`, { method: "DELETE" }),
 
-  deleteDutyRoster: async (id: string): Promise<any> => {
-    const { data, error } = await supabase.from("DutyRoster").delete().eq("id", id).select();
-    if (error) throw new Error(error.message);
-    return data;
-  },
-  
-  deletePersonnel: async (id: string): Promise<any> => {
-    // Cascade delete manually (Supabase could do this if configured, but we keep it safe)
-    await supabase.from("BookingLog").delete().eq("personnelId", id);
-    await supabase.from("DutyRoster").delete().eq("personnelId", id);
-    
-    const { data, error } = await supabase.from("personnel").delete().eq("id", id).select();
-    if (error) throw new Error(error.message);
-    return data;
-  },
+  // Duty Roster
+  getDutyRoster: (): Promise<DutyRoster[]> =>
+    apiFetch("/api/duty-roster"),
+
+  addDutyRoster: (data: {
+    personnelId: string;
+    monthYear: string;
+    status: string;
+    date?: string;
+  }): Promise<DutyRoster> =>
+    apiFetch("/api/duty-roster", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteDutyRoster: (id: string): Promise<{ status: string }> =>
+    apiFetch(`/api/duty-roster/${id}`, { method: "DELETE" }),
 };
